@@ -37,9 +37,13 @@ type ServerConfig struct {
 }
 
 type DBConfig struct {
-	DSN                string `yaml:"dsn"`
-	MaxOpenConnections int    `yaml:"25"`
-	MaxIdleConnections int    `yaml:"5"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+	SSLMode  string `yaml:"sslmode" default:"disable"`
+	MaxConn  int    `yaml:"max_conns" default:"10"`
 }
 
 type RedisConfig struct {
