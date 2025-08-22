@@ -1,4 +1,4 @@
-package postgres
+package user
 
 import (
 	"context"
@@ -6,21 +6,33 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/skinkvi/money_managment/internal/domain/user"
 	"github.com/skinkvi/money_managment/internal/storage"
 	"github.com/skinkvi/money_managment/pkg/logger"
 )
 
+type Repository interface {
+	Create(ctx context.Context, u *User) (int64, error)
+	GetByID(ctx context.Context, id int64) (*User, error)
+	Update(ctx context.Context, u *User) (*User, error)
+	Delete(ctx context.Context, id int64) error
+
+	// limit - максмальное количество записей
+	// offset - смещение от начала
+	List(ctx context.Context, limit, offset int) ([]User, error)
+	// Эта функция нужна для пагинации для мобилки, она возвращает общее количество пользователей.
+	Count(ctx context.Context) (int64, error)
+}
+
 type pgUserRepository struct {
-	db  *DB
+	db  *storage.DB
 	log logger.Logger
 }
 
-func NewUserRepository(db *DB, log logger.Logger) user.Repository {
+func NewUserRepository(db *storage.DB, log logger.Logger) Repository {
 	return &pgUserRepository{db: db, log: log}
 }
 
-func (r *pgUserRepository) Create(ctx context.Context, u *user.User) (int64, error) {
+func (r *pgUserRepository) Create(ctx context.Context, u *User) (int64, error) {
 	const query = `insert into users 
 		(username, email, passhash)
 		values
@@ -45,7 +57,7 @@ func (r *pgUserRepository) Create(ctx context.Context, u *user.User) (int64, err
 	return id, nil
 }
 
-func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*user.User, error) {
+func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*User, error) {
 	const query = `select username, email, passhash, create_at, update_at
 				   from users
 				   where id = $1`
@@ -59,7 +71,7 @@ func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*user.User, e
 	}
 	defer rows.Close()
 
-	var u user.User
+	var u User
 	if rows.Next() {
 		if err := rows.Scan(&u.Username, &u.Email, &u.PassHash, &u.CreateAt, &u.UpdateAt); err != nil {
 			r.log.Error(ctx, "failed to scan row GetByID",
@@ -84,13 +96,13 @@ func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*user.User, e
 	return &u, nil
 }
 
-func (r *pgUserRepository) Update(ctx context.Context, u *user.User) (*user.User, error) {
+func (r *pgUserRepository) Update(ctx context.Context, u *User) (*User, error) {
 	const query = `update users 
 	set username = $1, email = $2, passhash = $3, update_at = now()
 	where id = $4
 	returning id, username, email, passhash, create_at, update_at`
 
-	var usr user.User
+	var usr User
 
 	if err := r.db.Pool.QueryRow(ctx, query, u.Username, u.Email, u.PassHash, u.ID).Scan(&usr.ID, &usr.Username, &usr.Email, &usr.PassHash, &usr.CreateAt, &usr.UpdateAt); err != nil {
 		r.log.Error(ctx, "failed to execute query Update",
@@ -113,23 +125,24 @@ func (r *pgUserRepository) Delete(ctx context.Context, id int64) error {
 	from users
 	where id = $1`
 
-	if cmdTag, err := r.db.Pool.Exec(ctx, query, id); err != nil {
+	cmdTag, err := r.db.Pool.Exec(ctx, query, id)
+	if err != nil {
 		r.log.Error(ctx, "failed to execute query Delete",
 			logger.Field{Key: "error", Value: err},
 			logger.Field{Key: "user_id", Value: id})
 
-		if cmdTag.RowsAffected() == 0 {
-			r.log.Error(ctx, "user not found", logger.Field{Key: "user_id", Value: id})
-			return fmt.Errorf("user with id %d not found: %w", id, err)
-		}
-
 		return fmt.Errorf("failed delete user: %w", err)
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		r.log.Error(ctx, "user not found", logger.Field{Key: "user_id", Value: id})
+		return fmt.Errorf("user with id %d not found: %w", id, err)
 	}
 
 	return nil
 }
 
-func (r *pgUserRepository) List(ctx context.Context, limit, offset int) ([]user.User, error) {
+func (r *pgUserRepository) List(ctx context.Context, limit, offset int) ([]User, error) {
 	const query = `select id, username, email, passhash, create_at, update_at
 	from users
 	order by id
@@ -144,9 +157,9 @@ func (r *pgUserRepository) List(ctx context.Context, limit, offset int) ([]user.
 	}
 	defer rows.Close()
 
-	var users []user.User
+	var users []User
 	for rows.Next() {
-		var u user.User
+		var u User
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.PassHash, &u.CreateAt, &u.UpdateAt); err != nil {
 			r.log.Error(ctx, "failed scan List",
 				logger.Field{Key: "error", Value: err})

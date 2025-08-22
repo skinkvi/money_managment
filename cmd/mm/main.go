@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/skinkvi/money_managment/internal/config"
+	"github.com/skinkvi/money_managment/internal/storage"
 	"github.com/skinkvi/money_managment/pkg/logger"
 )
 
@@ -56,7 +57,6 @@ TODO: Database layer
   - internal/storage/postgres.go - подключение к БД
   - internal/models/ - Go structs для всех таблиц
   - internal/repository/ - интерфейсы и реализации для работы с данными
-  - Использовать sqlx или GORM (на выбор)
 
 ЭТАП 3: АВТОРИЗАЦИЯ И БЕЗОПАСНОСТЬ
 -----------------------------------
@@ -222,7 +222,12 @@ func main() {
 		Key:   "cfg",
 		Value: cfg,
 	})
-	// TODO: init database connection
+
+	db, err := storage.Connect(ctx, cfg.DataBase, log)
+	if err != nil {
+		return
+	}
+
 	// TODO: run migrations
 	// TODO: init Redis cache
 	// TODO: setup Gin router
