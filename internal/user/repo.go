@@ -58,7 +58,7 @@ func (r *pgUserRepository) Create(ctx context.Context, u *User) (int64, error) {
 }
 
 func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*User, error) {
-	const query = `select username, email, passhash, create_at, update_at
+	const query = `select id, username, email, passhash, create_at, update_at
 				   from users
 				   where id = $1`
 
@@ -73,7 +73,7 @@ func (r *pgUserRepository) GetByID(ctx context.Context, id int64) (*User, error)
 
 	var u User
 	if rows.Next() {
-		if err := rows.Scan(&u.Username, &u.Email, &u.PassHash, &u.CreateAt, &u.UpdateAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.PassHash, &u.CreateAt, &u.UpdateAt); err != nil {
 			r.log.Error(ctx, "failed to scan row GetByID",
 				logger.Field{Key: "error", Value: err},
 				logger.Field{Key: "user_id", Value: id})
@@ -136,7 +136,7 @@ func (r *pgUserRepository) Delete(ctx context.Context, id int64) error {
 
 	if cmdTag.RowsAffected() == 0 {
 		r.log.Error(ctx, "user not found", logger.Field{Key: "user_id", Value: id})
-		return fmt.Errorf("user with id %d not found: %w", id, err)
+		return fmt.Errorf("user with id %d not found", id)
 	}
 
 	return nil
@@ -170,7 +170,7 @@ func (r *pgUserRepository) List(ctx context.Context, limit, offset int) ([]User,
 	}
 
 	if err := rows.Err(); err != nil {
-		r.log.Error(ctx, "rows interation error in users List",
+		r.log.Error(ctx, "rows iteration error in users List",
 			logger.Field{Key: "error", Value: err})
 		return nil, fmt.Errorf("rows interation List: %w", err)
 	}
